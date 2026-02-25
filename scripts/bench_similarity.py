@@ -5,11 +5,11 @@ def vectorized_similarity(a: np.ndarray, b: np.ndarray, metric: str = "cosine") 
     """Uses NumPy's vectorized operations to perform cosine similarity calculations
     a and b are 2D arrays of shape (n, d) where n is the number of vectors and d is the dimension"""
     if metric == "cosine":
-        ans = (a @ b.T) / (np.linalg.norm(a, axis=1, keepdims=True) * np.linalg.norm(b, axis=1, keepdims=True).T)
-        return ans
+        ans = (np.sum(a * b, axis=1)) / (np.linalg.norm(a, axis=1, keepdims=True) * np.linalg.norm(b, axis=1, keepdims=True).T)
+        return ans.reshape(-1)
     elif metric == "euclidean":
-        ans = np.sqrt(np.sum((a - b) ** 2, axis=1))
-        return ans
+        ans = np.linalg.norm(a - b, axis=1)
+        return ans.reshape(-1)
     else:
         raise ValueError("Metric must be 'cosine' or 'euclidean'")
 
