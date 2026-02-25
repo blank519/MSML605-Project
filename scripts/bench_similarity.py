@@ -1,5 +1,6 @@
 import numpy as np
 import random
+import math
 
 def vectorized_similarity(a: np.ndarray, b: np.ndarray, metric: str = "cosine") -> np.ndarray:
     """Uses NumPy's vectorized operations to perform cosine similarity calculations
@@ -14,11 +15,29 @@ def vectorized_similarity(a: np.ndarray, b: np.ndarray, metric: str = "cosine") 
         raise ValueError("Metric must be 'cosine' or 'euclidean'")
 
 def naive_similarity(a: np.ndarray, b: np.ndarray, metric: str = "cosine") -> np.ndarray:
-    """Uses a Python loop to compute cosine similarity naively"""
+    """Uses a Python loop to compute cosine similarity naively, without NumPy"""
     if metric == "cosine":
-        pass
+        result = []
+        for i in range(len(a)):
+            norm_a = 0
+            norm_b = 0
+            dot_product = 0
+            for j in range(len(a[0])):
+                norm_a += a[i][j] ** 2
+                norm_b += b[i][j] ** 2
+                dot_product += a[i][j] * b[i][j]
+            norm_a = math.sqrt(norm_a)
+            norm_b = math.sqrt(norm_b)
+            result.append(dot_product / (norm_a * norm_b))
+        return np.array(result)
     elif metric == "euclidean":
-        pass
+        result = []
+        for i in range(len(a)):
+            distance = 0
+            for j in range(len(a[0])):
+                distance += (a[i][j] - b[i][j]) ** 2
+            result.append(math.sqrt(distance))
+        return np.array(result)
     else:
         raise ValueError("Metric must be 'cosine' or 'euclidean'")
 
