@@ -1,6 +1,7 @@
 import numpy as np
 import random
 import math
+import time
 
 def vectorized_similarity(a: np.ndarray, b: np.ndarray, metric: str = "cosine") -> np.ndarray:
     """Uses NumPy's vectorized operations to perform cosine similarity calculations
@@ -43,13 +44,18 @@ def naive_similarity(a: np.ndarray, b: np.ndarray, metric: str = "cosine") -> np
 
 def generate_synthetic_data(n: int, d: int, rng: random.Random) -> tuple[np.ndarray, np.ndarray]:
     """Generates synthetic data for benchmarking"""
+    a = np.array([[rng.random() for _ in range(d)] for _ in range(n)])
+    b = np.array([[rng.random() for _ in range(d)] for _ in range(n)])
+    return a, b
 
-    pass
-
-def benchmark(a: np.ndarray, b: np.ndarray, seed: int = 42):
+def benchmark(seed: int = 42):
     """ Compares the performance of vectorized and naive similarity calculations 
     for both cosine and euclidean similarity calculations
     """
     rng = random.Random(seed)
 
-    pass
+    a, b = generate_synthetic_data(1000, 100, rng)
+
+
+    print(vectorized_similarity(a, b, "cosine"))
+    print(naive_similarity(a, b, "cosine"))
