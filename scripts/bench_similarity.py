@@ -56,6 +56,12 @@ def benchmark(seed: int = 42):
 
     a, b = generate_synthetic_data(1000, 100, rng)
 
+    start_time = time.perf_counter()
+    result = vectorized_similarity(a, b, "cosine")
+    end_time = time.perf_counter()
+    print(f"Vectorized cosine similarity took {end_time - start_time} seconds")
 
-    print(vectorized_similarity(a, b, "cosine"))
-    print(naive_similarity(a, b, "cosine"))
+    start_time = time.perf_counter()
+    result = naive_similarity(a, b, "cosine")
+    end_time = time.perf_counter()
+    print(f"Naive cosine similarity took {end_time - start_time} seconds")
