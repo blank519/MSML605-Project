@@ -59,9 +59,27 @@ def benchmark(seed: int = 42):
     start_time = time.perf_counter()
     result = vectorized_similarity(a, b, "cosine")
     end_time = time.perf_counter()
-    print(f"Vectorized cosine similarity took {end_time - start_time} seconds")
+    vectorized_time = end_time - start_time
+    print(f"Vectorized cosine similarity took {vectorized_time:.2f} seconds")
 
     start_time = time.perf_counter()
     result = naive_similarity(a, b, "cosine")
     end_time = time.perf_counter()
-    print(f"Naive cosine similarity took {end_time - start_time} seconds")
+    naive_time = end_time - start_time
+    print(f"Naive cosine similarity took {naive_time:.2f} seconds")
+
+    print(f"Vectorized is {(naive_time / vectorized_time):.2f} times faster than naive for cosine similarity")
+
+    start_time = time.perf_counter()
+    result = vectorized_similarity(a, b, "euclidean")
+    end_time = time.perf_counter()
+    vectorized_time = end_time - start_time
+    print(f"Vectorized euclidean similarity took {vectorized_time:.2f} seconds")
+
+    start_time = time.perf_counter()
+    result = naive_similarity(a, b, "euclidean")
+    end_time = time.perf_counter()
+    naive_time = end_time - start_time
+    print(f"Naive euclidean similarity took {naive_time:.2f} seconds")
+
+    print(f"Vectorized is {(naive_time / vectorized_time):.2f} times faster than naive for euclidean similarity")
