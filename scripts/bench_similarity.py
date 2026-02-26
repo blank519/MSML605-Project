@@ -7,11 +7,11 @@ def vectorized_similarity(a: np.ndarray, b: np.ndarray, metric: str = "cosine") 
     """Uses NumPy's vectorized operations to perform cosine similarity calculations
     a and b are 2D arrays of shape (n, d) where n is the number of vectors and d is the dimension"""
     if metric == "cosine":
-        ans = (np.sum(a * b, axis=1)) / (np.linalg.norm(a, axis=1, keepdims=True) * np.linalg.norm(b, axis=1, keepdims=True).T)
-        return ans.reshape(-1)
+        ans = (np.sum(a * b, axis=1)) / (np.linalg.norm(a, axis=1) * np.linalg.norm(b, axis=1))
+        return ans
     elif metric == "euclidean":
         ans = np.linalg.norm(a - b, axis=1)
-        return ans.reshape(-1)
+        return ans
     else:
         raise ValueError("Metric must be 'cosine' or 'euclidean'")
 
@@ -54,8 +54,8 @@ def benchmark(seed: int = 42):
     """
     rng = random.Random(seed)
 
-    a, b = generate_synthetic_data(1000, 100, rng)
-
+    a, b = generate_synthetic_data(10000, 1000, rng)
+    
     start_time = time.perf_counter()
     result = vectorized_similarity(a, b, "cosine")
     end_time = time.perf_counter()
@@ -83,3 +83,6 @@ def benchmark(seed: int = 42):
     print(f"Naive euclidean similarity took {naive_time:.2f} seconds")
 
     print(f"Vectorized is {(naive_time / vectorized_time):.2f} times faster than naive for euclidean similarity")
+
+if __name__ == "__main__":
+    benchmark()
