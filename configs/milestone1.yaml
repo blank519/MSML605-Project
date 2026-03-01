@@ -1,0 +1,24 @@
+# Milestone 1 configuration — all scripts read from this file.
+
+# Fixed random seed for determinism across ingestion, splits, and pair generation. 
+seed: 1
+
+# Split policy: identities are assigned to splits so no identity appears in more than one split (identity-disjoint split).
+splits:
+  policy: "identity-disjoint split: identities sorted, shuffled with seed, then
+    assigned 70% train / 15% val / 15% test by identity count"
+  val_frac: 0.15
+  test_frac: 0.15
+
+# Paths (relative to repo root; data/ and outputs/ are gitignored)
+paths:
+  data_cache: "data/tfds_cache"      # TFDS will cache downloads here
+  outputs: "outputs"
+
+# Data source description for manifest
+data_source: "tensorflow_datasets lfw (latest available version, downloaded via tfds.load)"
+
+# Pair generation settings
+pairs:
+  positive_per_split: 500
+  negative_per_split: 500

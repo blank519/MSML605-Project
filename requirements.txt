@@ -1,0 +1,6 @@
+# List of dependencies for the project, make sure that you have these installed in your Python environment before running the scripts.
+
+numpy
+pyyaml
+tensorflow
+tensorflow-datasets
