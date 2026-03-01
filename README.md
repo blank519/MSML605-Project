@@ -32,7 +32,7 @@ python scripts/bench_similarity.py --config configs/milestone1.yaml
 ```
 
 ## Outputs
-All outputs are written to the `outputs/` directory, which is gitignored and recreated on each run.
+All outputs are written to the `outputs/` directory, which is gitignored and recreated on each run. As the LFW dataset is drawn from the TDFS library, no data was appended to the repository - please download the data using the virtual environment.
 
 | File Name | Description |
 |------|-------------|
