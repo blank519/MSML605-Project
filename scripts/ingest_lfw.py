@@ -77,9 +77,11 @@ def load_lfw_tfds(cache_dir: str):
 
     records = []
     for example in ds.as_numpy_iterator():
-        # TFDS LFW fields: 'image', 'label' (identity index), 'image/filename'
-        identity_idx = int(example["label"])
-        identity_name = info.features["label"].int2str(identity_idx)
+        raw_label = example["label"]
+        if isinstance(raw_label, bytes):
+            identity_name = raw_label.decode("utf-8")
+        else:
+            identity_name = info.features["label"].int2str(int(raw_label))
         # Decode filename bytes
         raw_fname = example.get("image/filename", b"")
         if isinstance(raw_fname, bytes):
