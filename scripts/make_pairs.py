@@ -15,45 +15,68 @@ def _relative_path(path: Path, base: Path) -> str:
     return path.resolve().relative_to(base.resolve()).as_posix()
 
 
-def _get_label(img_path: Path, split_root: Path) -> str:
-    """Infer identity from an LFW-style path.
+def _find_lfw_root(extracted_root: Path) -> Path:
+    if not extracted_root.exists():
+        raise FileNotFoundError(f"Extracted root directory not found: {extracted_root}")
 
-    Supports either:
-    - Directory layout: <split_root>/<person_name>/<image_file>
-    - Flat layout: <split_root>/<person_name>_<####>.<ext>
-    """
+    candidates = sorted(
+        [p for p in extracted_root.rglob("lfw") if p.is_dir()],
+        key=lambda p: p.as_posix(),
+    )
+    for c in candidates:
+        try:
+            next(x for x in c.rglob("*") if x.is_file() and _is_image_file(x))
+            return c
+        except StopIteration:
+            continue
 
-    # Return "directory layout" image label
-    try:
-        rel = img_path.resolve().relative_to(split_root.resolve())
-    except Exception:
-        rel = img_path
-
-    if len(rel.parts) >= 2:
-        return rel.parts[0]
-
-    # Return "flat layout" image label
-    stem = img_path.stem
-    if "_" in stem:
-        return stem.rsplit("_", 1)[0]
-    return stem
+    raise FileNotFoundError(
+        f"Could not locate an 'lfw' directory containing images under: {extracted_root}"
+    )
 
 
-def _group_by_label(split_dir: Path) -> dict[str, list[Path]]:
-    if not split_dir.exists():
-        raise FileNotFoundError(f"Split directory not found: {split_dir}")
+def _load_split_csv(split_csv: Path) -> pd.DataFrame:
+    if not split_csv.exists():
+        raise FileNotFoundError(f"Split CSV not found: {split_csv}")
 
-    imgs = [p for p in split_dir.rglob("*") if p.is_file() and _is_image_file(p)]
-    imgs = sorted(imgs, key=lambda p: p.as_posix())
+    df = pd.read_csv(split_csv)
+    required = {"identity", "filename", "image_path"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(
+            f"Split CSV {split_csv} missing required columns: {sorted(missing)}. "
+            f"Found columns: {list(df.columns)}"
+        )
 
+    df = df[["identity", "filename", "image_path"]].copy()
+    df["identity"] = df["identity"].astype(str)
+    df["filename"] = df["filename"].astype(str)
+    df["image_path"] = df["image_path"].astype(str)
+    df = df.sort_values(by=["identity", "filename", "image_path"], kind="mergesort").reset_index(drop=True)
+    return df
+
+
+def _resolve_image_path(lfw_root: Path, image_path: str) -> Path:
+    img = Path(image_path)
+    if img.is_absolute():
+        return img
+
+    parts = list(img.parts)
+    if len(parts) > 0 and parts[0].lower() == "lfw":
+        img = Path(*parts[1:])
+
+    return lfw_root / img
+
+
+def _group_by_identity(split_df: pd.DataFrame, lfw_root: Path) -> dict[str, list[Path]]:
     grouping: dict[str, list[Path]] = {}
-    for p in imgs:
-        label = _get_label(p, split_dir)
-        grouping.setdefault(label, []).append(p)
+    for row in split_df.itertuples(index=False):
+        identity = str(row.identity)
+        img_path = _resolve_image_path(lfw_root, str(row.image_path))
+        grouping.setdefault(identity, []).append(img_path)
 
-    for label in list(grouping.keys()):
-        grouping[label] = sorted(grouping[label], key=lambda p: p.as_posix())
-
+    for identity in list(grouping.keys()):
+        grouping[identity] = sorted(grouping[identity], key=lambda p: p.as_posix())
     return grouping
 
 
@@ -159,9 +182,8 @@ def _make_pairs_df(
 
 
 def generate_pairs(
-    train_dir: Path,
-    val_dir: Path,
-    test_dir: Path,
+    splits_dir: Path,
+    extracted_root: Path,
     out_dir: Path,
     seed: int = 42,
     n_pos_train: int = 20_000,
@@ -172,8 +194,10 @@ def generate_pairs(
     """Generate LFW verification pairs and write them to disk.
 
     Pair policy (deterministic given the same inputs + seed):
-    - **Dedicated splits**: `train`, `val`, and `test` are generated from separate
-      directories (`train_dir`, `val_dir`, `test_dir`).
+    - **Split source**: image membership is defined by CSV files in `splits_dir`:
+      `train.csv`, `val.csv`, and `test.csv` (from `scripts/ingest_lfw.py`).
+    - **Image root**: image files are resolved under the TFDS extracted LFW directory
+      discovered under `extracted_root` (typically `data/tfds_cache/downloads/extracted`).
     - **Positive pairs**: sampled without replacement from all possible (image_i,
       image_j) combinations within each identity, then shuffled with the fixed seed.
     - **Negative pairs**: sampled by choosing two different identities uniformly,
@@ -190,9 +214,15 @@ def generate_pairs(
 
     rng = random.Random(seed)
 
-    train_by_label = _group_by_label(train_dir)
-    val_by_label = _group_by_label(val_dir)
-    test_by_label = _group_by_label(test_dir)
+    lfw_root = _find_lfw_root(extracted_root)
+
+    train_df = _load_split_csv(splits_dir / "train.csv")
+    val_df = _load_split_csv(splits_dir / "val.csv")
+    test_df = _load_split_csv(splits_dir / "test.csv")
+
+    train_by_label = _group_by_identity(train_df, lfw_root)
+    val_by_label = _group_by_identity(val_df, lfw_root)
+    test_by_label = _group_by_identity(test_df, lfw_root)
 
     n_neg_train = int(round(n_pos_train * neg_per_pos))
     n_neg_val = int(round(n_pos_val * neg_per_pos))
@@ -219,9 +249,8 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Generate LFW-style verification pairs")
-    parser.add_argument("--train-dir", type=str, default="data/train")
-    parser.add_argument("--val-dir", type=str, default="data/val")
-    parser.add_argument("--test-dir", type=str, default="data/test")
+    parser.add_argument("--splits-dir", type=str, default="outputs/splits")
+    parser.add_argument("--extracted-root", type=str, default="data/tfds_cache/downloads/extracted")
     parser.add_argument("--out-dir", type=str, default="outputs/pairs")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--pos-train", type=int, default=20_000)
@@ -232,9 +261,8 @@ def main() -> None:
     args = parser.parse_args()
 
     generate_pairs(
-        train_dir=Path(args.train_dir),
-        val_dir=Path(args.val_dir),
-        test_dir=Path(args.test_dir),
+        splits_dir=Path(args.splits_dir),
+        extracted_root=Path(args.extracted_root),
         out_dir=Path(args.out_dir),
         seed=args.seed,
         n_pos_train=args.pos_train,
