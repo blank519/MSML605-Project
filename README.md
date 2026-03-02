@@ -23,7 +23,7 @@ python scripts/ingest_lfw.py --config configs/milestone1.yaml
 
 **4. Run pair generation:**
 ```powershell
-python scripts/make_pairs.py
+python scripts/make_pairs.py --config configs/milestone1.yaml
 ```
 
 **5. Run similarity benchmark:**
