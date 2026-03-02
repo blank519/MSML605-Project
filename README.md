@@ -23,12 +23,12 @@ python scripts/ingest_lfw.py --config configs/milestone1.yaml
 
 **4. Run pair generation:**
 ```powershell
-python scripts/make_pairs.py --config configs/milestone1.yaml
+python scripts/make_pairs.py
 ```
 
 **5. Run similarity benchmark:**
 ```powershell
-python scripts/bench_similarity.py --config configs/milestone1.yaml
+python scripts/bench_similarity.py
 ```
 
 ## Outputs
@@ -40,7 +40,7 @@ All outputs are written to the `outputs/` directory, which is gitignored and rec
 | `outputs/splits/train.csv` | Training split records (identity, filename, image_path) |
 | `outputs/splits/val.csv` | Validation split records |
 | `outputs/splits/test.csv` | Test split records |
-| `outputs/pairs/train.csv` | Sampled verification pairs for training |
-| `outputs/pairs/val.csv` | Sampled verification pairs for validation |
-| `outputs/pairs/test.csv` | Sampled verification pairs for testing |
+| `outputs/pairs/train_pairs.csv` | Sampled verification pairs for training |
+| `outputs/pairs/val_pairs.csv` | Sampled verification pairs for validation |
+| `outputs/pairs/test_pairs.csv` | Sampled verification pairs for testing |
 | `outputs/bench/results.txt` | Benchmark timings and correctness check results |
