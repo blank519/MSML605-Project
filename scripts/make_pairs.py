@@ -1,6 +1,7 @@
 import pandas as pd
 import random
 from pathlib import Path
+import yaml
 
 
 def _is_image_file(p: Path) -> bool:
@@ -13,6 +14,13 @@ def _project_root() -> Path:
 
 def _relative_path(path: Path, base: Path) -> str:
     return path.resolve().relative_to(base.resolve()).as_posix()
+
+
+def _load_config(config_path: Path) -> dict:
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    with open(config_path, "r") as f:
+        return yaml.safe_load(f)
 
 
 def _find_lfw_root(extracted_root: Path) -> Path:
@@ -149,14 +157,14 @@ def _make_pairs_df(
     pos_pairs: list[tuple[Path, Path]],
     neg_pairs: list[tuple[Path, Path]],
     split_name: str,
-    project_root: Path,
+    path_base: Path,
 ) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     for l, r in pos_pairs:
         rows.append(
             {
-                "left_path": _relative_path(l, project_root),
-                "right_path": _relative_path(r, project_root),
+                "left_path": _relative_path(l, path_base),
+                "right_path": _relative_path(r, path_base),
                 "label": 1,
                 "split": split_name,
             }
@@ -164,8 +172,8 @@ def _make_pairs_df(
     for l, r in neg_pairs:
         rows.append(
             {
-                "left_path": _relative_path(l, project_root),
-                "right_path": _relative_path(r, project_root),
+                "left_path": _relative_path(l, path_base),
+                "right_path": _relative_path(r, path_base),
                 "label": 0,
                 "split": split_name,
             }
@@ -209,7 +217,6 @@ def generate_pairs(
     if neg_per_pos < 0:
         raise ValueError("neg_per_pos must be >= 0")
 
-    project_root = _project_root()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     rng = random.Random(seed)
@@ -230,15 +237,15 @@ def generate_pairs(
 
     pos_train = _sample_positive_pairs(train_by_label, n_pos_train, rng)
     neg_train = _sample_negative_pairs(train_by_label, n_neg_train, rng)
-    df_train = _make_pairs_df(pos_train, neg_train, "train", project_root)
+    df_train = _make_pairs_df(pos_train, neg_train, "train", lfw_root)
 
     pos_val = _sample_positive_pairs(val_by_label, n_pos_val, rng)
     neg_val = _sample_negative_pairs(val_by_label, n_neg_val, rng)
-    df_val = _make_pairs_df(pos_val, neg_val, "val", project_root)
+    df_val = _make_pairs_df(pos_val, neg_val, "val", lfw_root)
 
     pos_test = _sample_positive_pairs(test_by_label, n_pos_test, rng)
     neg_test = _sample_negative_pairs(test_by_label, n_neg_test, rng)
-    df_test = _make_pairs_df(pos_test, neg_test, "test", project_root)
+    df_test = _make_pairs_df(pos_test, neg_test, "test", lfw_root)
 
     df_train.to_csv(out_dir / "train_pairs.csv", index=False)
     df_val.to_csv(out_dir / "val_pairs.csv", index=False)
@@ -249,26 +256,71 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Generate LFW-style verification pairs")
-    parser.add_argument("--splits-dir", type=str, default="outputs/splits")
-    parser.add_argument("--extracted-root", type=str, default="data/tfds_cache/downloads/extracted")
-    parser.add_argument("--out-dir", type=str, default="outputs/pairs")
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--pos-train", type=int, default=20_000)
-    parser.add_argument("--pos-val", type=int, default=5_000)
-    parser.add_argument("--pos-test", type=int, default=5_000)
+    parser.add_argument("--config", type=str, default=None)
+    parser.add_argument("--splits-dir", type=str, default=None)
+    parser.add_argument("--extracted-root", type=str, default=None)
+    parser.add_argument("--out-dir", type=str, default=None)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--pos-train", type=int, default=None)
+    parser.add_argument("--pos-val", type=int, default=None)
+    parser.add_argument("--pos-test", type=int, default=None)
     parser.add_argument("--neg-per-pos", type=float, default=1.0)
 
     args = parser.parse_args()
 
+    project_root = _project_root()
+
+    cfg = None
+    if args.config is not None:
+        cfg = _load_config(project_root / args.config)
+
+    splits_dir = Path(args.splits_dir) if args.splits_dir is not None else project_root / "outputs/splits"
+    out_dir = Path(args.out_dir) if args.out_dir is not None else project_root / "outputs/pairs"
+
+    if args.extracted_root is not None:
+        extracted_root = Path(args.extracted_root)
+    elif cfg is not None:
+        extracted_root = project_root / cfg["paths"]["data_cache"] / "downloads" / "extracted"
+    else:
+        extracted_root = project_root / "data/tfds_cache/downloads/extracted"
+
+    seed = int(args.seed) if args.seed is not None else int(cfg.get("seed", 42) if cfg is not None else 42)
+
+    if args.pos_train is not None:
+        n_pos_train = int(args.pos_train)
+    elif cfg is not None and "pairs" in cfg and "positive_per_split" in cfg["pairs"]:
+        n_pos_train = int(cfg["pairs"]["positive_per_split"])
+    else:
+        n_pos_train = 20_000
+
+    if args.pos_val is not None:
+        n_pos_val = int(args.pos_val)
+    elif cfg is not None and "pairs" in cfg and "positive_per_split" in cfg["pairs"]:
+        n_pos_val = int(cfg["pairs"]["positive_per_split"])
+    else:
+        n_pos_val = 5_000
+
+    if args.pos_test is not None:
+        n_pos_test = int(args.pos_test)
+    elif cfg is not None and "pairs" in cfg and "positive_per_split" in cfg["pairs"]:
+        n_pos_test = int(cfg["pairs"]["positive_per_split"])
+    else:
+        n_pos_test = 5_000
+
+    neg_per_pos = args.neg_per_pos
+    if cfg is not None and "pairs" in cfg and "negative_per_split" in cfg["pairs"]:
+        denom = float(n_pos_train) if n_pos_train > 0 else 1.0
+        neg_per_pos = float(cfg["pairs"]["negative_per_split"]) / denom
+
     generate_pairs(
-        splits_dir=Path(args.splits_dir),
-        extracted_root=Path(args.extracted_root),
-        out_dir=Path(args.out_dir),
-        seed=args.seed,
-        n_pos_train=args.pos_train,
-        n_pos_val=args.pos_val,
-        n_pos_test=args.pos_test,
-        neg_per_pos=args.neg_per_pos,
+        splits_dir=splits_dir,
+        extracted_root=extracted_root,
+        out_dir=out_dir,
+        seed=seed,
+        n_pos_train=n_pos_train,
+        n_pos_val=n_pos_val,
+        n_pos_test=n_pos_test,
+        neg_per_pos=neg_per_pos,
     )
 
 
