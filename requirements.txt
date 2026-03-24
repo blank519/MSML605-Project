@@ -1,7 +1,7 @@
 # List of dependencies for the project, make sure that you have these installed in your Python environment before running the scripts.
 
-numpy==1.26.0
-pandas==2.2.3
-pyyaml==6.0.2
-tensorflow==2.16.1
+numpy==2.4.3
+pandas==3.0.1
+pyyaml==6.0.3
+tensorflow==2.21.0
 tensorflow-datasets==4.9.9
