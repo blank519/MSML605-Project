@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.model import SiameseVerifier
+from scripts.metrics import TarAtFarCallback
 
 
 def _load_config(config_path: Path) -> dict:
@@ -133,7 +134,9 @@ def train(
     model = SiameseVerifier(input_shape=(image_size[0], image_size[1], 3))
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
 
-    callbacks: list[tf.keras.callbacks.Callback] = []
+    callbacks: list[tf.keras.callbacks.Callback] = [
+        TarAtFarCallback(dataset=val_ds, far=0.01, name="val_tar@far0.01"),
+    ]
 
     history = model.fit(
         train_ds,
