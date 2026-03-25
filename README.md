@@ -28,7 +28,12 @@ python scripts/make_pairs.py --config configs/milestone1.yaml
 
 **5. Run similarity benchmark:**
 ```powershell
-python scripts/bench_similarity.py
+python scripts/bench_similarity.py  
+```
+
+**6. Run training loop:**
+```powershell
+python src/train.py --config configs/milestone1.yaml
 ```
 
 ## Outputs

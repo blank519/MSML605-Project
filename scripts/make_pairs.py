@@ -1,11 +1,8 @@
 import pandas as pd
 import random
 from pathlib import Path
-import yaml
 
-
-def _is_image_file(p: Path) -> bool:
-    return p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+from utils import find_lfw_root, load_config
 
 
 def _project_root() -> Path:
@@ -14,33 +11,6 @@ def _project_root() -> Path:
 
 def _relative_path(path: Path, base: Path) -> str:
     return path.resolve().relative_to(base.resolve()).as_posix()
-
-
-def _load_config(config_path: Path) -> dict:
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-    with open(config_path, "r") as f:
-        return yaml.safe_load(f)
-
-
-def _find_lfw_root(extracted_root: Path) -> Path:
-    if not extracted_root.exists():
-        raise FileNotFoundError(f"Extracted root directory not found: {extracted_root}")
-
-    candidates = sorted(
-        [p for p in extracted_root.rglob("lfw") if p.is_dir()],
-        key=lambda p: p.as_posix(),
-    )
-    for c in candidates:
-        try:
-            next(x for x in c.rglob("*") if x.is_file() and _is_image_file(x))
-            return c
-        except StopIteration:
-            continue
-
-    raise FileNotFoundError(
-        f"Could not locate an 'lfw' directory containing images under: {extracted_root}"
-    )
 
 
 def _load_split_csv(split_csv: Path) -> pd.DataFrame:
@@ -221,7 +191,7 @@ def generate_pairs(
 
     rng = random.Random(seed)
 
-    lfw_root = _find_lfw_root(extracted_root)
+    lfw_root = find_lfw_root(extracted_root)
 
     train_df = _load_split_csv(splits_dir / "train.csv")
     val_df = _load_split_csv(splits_dir / "val.csv")
@@ -272,7 +242,7 @@ def main() -> None:
 
     cfg = None
     if args.config is not None:
-        cfg = _load_config(project_root / args.config)
+        cfg = load_config(project_root / args.config)
 
     splits_dir = Path(args.splits_dir) if args.splits_dir is not None else project_root / "outputs/splits"
     out_dir = Path(args.out_dir) if args.out_dir is not None else project_root / "outputs/pairs"

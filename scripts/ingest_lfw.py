@@ -23,22 +23,9 @@ from pathlib import Path
 
 # Required third-party imports, included in requirements.txt
 import numpy as np
-import yaml
+import tensorflow_datasets as tfds
 
-
-# Load yaml config
-
-def load_config(config_path: str) -> dict:
-    """Loads the yaml file and returns a dictionary of its contents.
-
-    Args:
-        config_path (str): yaml file path
-
-    Returns:
-        dict: key-value pairs from the yaml file
-    """
-    with open(config_path, "r") as f:
-        return yaml.safe_load(f)
+from utils import find_lfw_root, is_image_file, load_config
 
 
 # Loading LFW dataset using tensorflow-datasets (TFDS)
@@ -56,14 +43,6 @@ def load_lfw_tfds(cache_dir: str):
             - filename (str): image filename.
             - image_path (str): image file path
     """
-    try:
-        import tensorflow_datasets as tfds
-    except ImportError:
-        print(
-            "ERROR: tensorflow-datasets is not installed. Make sure that requirements.txt is installed and that you are using the correct Python environment."
-        )
-        sys.exit(1)
-
     project_root = Path(__file__).resolve().parents[1]
     cache_path = (project_root / cache_dir).resolve() if not os.path.isabs(cache_dir) else Path(cache_dir).resolve()
 
@@ -78,33 +57,16 @@ def load_lfw_tfds(cache_dir: str):
             "Try re-running ingestion or check your tfds cache."
         )
 
-    def _is_image_file(p: Path) -> bool:
-        return p.suffix.lower() in {".jpg", ".jpeg", ".png"}
-
-    def _find_lfw_root(extracted: Path) -> Path:
-        candidates = sorted(
-            [p for p in extracted.rglob("lfw") if p.is_dir()],
-            key=lambda p: p.as_posix(),
-        )
-        for c in candidates:
-            try:
-                next(x for x in c.rglob("*") if x.is_file() and _is_image_file(x))
-                return c
-            except StopIteration:
-                continue
-        raise FileNotFoundError(
-            f"Could not locate an 'lfw' directory containing images under: {extracted}"
-        )
-
-    lfw_root = _find_lfw_root(extracted_root)
+    lfw_root = find_lfw_root(extracted_root)
 
     records: list[dict] = []
     for ident_dir in sorted([p for p in lfw_root.iterdir() if p.is_dir()], key=lambda p: p.name):
         identity_name = ident_dir.name
         image_files = sorted(
-            [p for p in ident_dir.iterdir() if p.is_file() and _is_image_file(p)],
+            [p for p in ident_dir.iterdir() if p.is_file() and is_image_file(p)],
             key=lambda p: p.name,
         )
+
         for img_path in image_files:
             filename = img_path.name
             records.append(

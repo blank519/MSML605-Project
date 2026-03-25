@@ -4,7 +4,6 @@ import sys
 
 import pandas as pd
 import tensorflow as tf
-import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -12,38 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from scripts.model import SiameseVerifier
 from scripts.metrics import TarAtFarCallback
-
-
-def _load_config(config_path: Path) -> dict:
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-    with open(config_path, "r") as f:
-        return yaml.safe_load(f)
-
-
-def _is_image_file(p: Path) -> bool:
-    return p.suffix.lower() in {".jpg", ".jpeg", ".png"}
-
-
-def _find_lfw_root(extracted_root: Path) -> Path:
-    if not extracted_root.exists():
-        raise FileNotFoundError(f"Extracted root directory not found: {extracted_root}")
-
-    candidates = sorted(
-        [p for p in extracted_root.rglob("lfw") if p.is_dir()],
-        key=lambda p: p.as_posix(),
-    )
-    for c in candidates:
-        try:
-            next(x for x in c.rglob("*") if x.is_file() and _is_image_file(x))
-            return c
-        except StopIteration:
-            continue
-
-    raise FileNotFoundError(
-        f"Could not locate an 'lfw' directory containing images under: {extracted_root}"
-    )
-
+from scripts.utils import find_lfw_root, load_config
 
 def _read_image(path: tf.Tensor, image_size: tuple[int, int]) -> tf.Tensor:
     image_bytes = tf.io.read_file(path)
@@ -51,7 +19,6 @@ def _read_image(path: tf.Tensor, image_size: tuple[int, int]) -> tf.Tensor:
     img = tf.image.resize(img, image_size, method=tf.image.ResizeMethod.BILINEAR)
     img = tf.cast(img, tf.float32)
     return img
-
 
 def _make_dataset(
     pairs_csv: Path,
@@ -91,7 +58,6 @@ def _make_dataset(
     ds = ds.prefetch(tf.data.AUTOTUNE)
     return ds
 
-
 def train(
     project_root: Path,
     config_path: Path | None = None,
@@ -103,7 +69,7 @@ def train(
     learning_rate: float = 1e-3,
     model_out: Path | None = None,
 ) -> tuple[SiameseVerifier, tf.keras.callbacks.History]:
-    cfg = _load_config(config_path) if config_path is not None else None
+    cfg = load_config(config_path) if config_path is not None else None
 
     outputs_dir = project_root / (cfg["paths"]["outputs"] if cfg is not None else "outputs")
     pairs_dir = pairs_dir if pairs_dir is not None else outputs_dir / "pairs"
@@ -114,7 +80,7 @@ def train(
         else:
             extracted_root = project_root / cfg["paths"]["data_cache"] / "downloads" / "extracted"
 
-    lfw_root = _find_lfw_root(extracted_root)
+    lfw_root = find_lfw_root(extracted_root)
 
     train_ds = _make_dataset(
         pairs_csv=pairs_dir / "train_pairs.csv",
