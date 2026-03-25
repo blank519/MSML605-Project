@@ -65,46 +65,66 @@ def load_lfw_tfds(cache_dir: str):
         )
         sys.exit(1)
 
-    print(f"[ingest] Loading LFW via TFDS (cache_dir={cache_dir}) ...")
-    ds, info = tfds.load(
-        "lfw",
-        split = "train",
-        data_dir = cache_dir,
-        with_info = True,
-        # We will handle shuffling and splitting ourselves, so disable TFDS shuffling
-        shuffle_files = False,
-    )
+    project_root = Path(__file__).resolve().parents[1]
+    cache_path = (project_root / cache_dir).resolve() if not os.path.isabs(cache_dir) else Path(cache_dir).resolve()
 
-    records = []
-    for example in ds.as_numpy_iterator():
-        raw_label = example["label"]
-        if isinstance(raw_label, bytes):
-            identity_name = raw_label.decode("utf-8")
-        else:
-            identity_name = info.features["label"].int2str(int(raw_label))
-        # Decode filename bytes
-        raw_fname = example.get("image/filename", b"")
-        if isinstance(raw_fname, bytes):
-            raw_fname = raw_fname.decode("utf-8")
-        filename = raw_fname if raw_fname else f"{identity_name}_{len(records):06d}.jpg"
+    print(f"[ingest] Preparing LFW via TFDS (cache_dir={cache_path}) ...")
+    builder = tfds.builder("lfw", data_dir=str(cache_path))
+    builder.download_and_prepare()
 
-        records.append(
-            {
-                "identity": identity_name,
-                "filename": filename,
-                # Store a logical path relative to the cache for portability
-                "image_path": os.path.join("lfw", identity_name, filename),
-            }
+    extracted_root = cache_path / "downloads" / "extracted"
+    if not extracted_root.exists():
+        raise FileNotFoundError(
+            f"TFDS extracted directory not found: {extracted_root}. "
+            "Try re-running ingestion or check your tfds cache."
         )
 
-    # Deterministic ordering: sort by (identity, filename)
+    def _is_image_file(p: Path) -> bool:
+        return p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+
+    def _find_lfw_root(extracted: Path) -> Path:
+        candidates = sorted(
+            [p for p in extracted.rglob("lfw") if p.is_dir()],
+            key=lambda p: p.as_posix(),
+        )
+        for c in candidates:
+            try:
+                next(x for x in c.rglob("*") if x.is_file() and _is_image_file(x))
+                return c
+            except StopIteration:
+                continue
+        raise FileNotFoundError(
+            f"Could not locate an 'lfw' directory containing images under: {extracted}"
+        )
+
+    lfw_root = _find_lfw_root(extracted_root)
+
+    records: list[dict] = []
+    for ident_dir in sorted([p for p in lfw_root.iterdir() if p.is_dir()], key=lambda p: p.name):
+        identity_name = ident_dir.name
+        image_files = sorted(
+            [p for p in ident_dir.iterdir() if p.is_file() and _is_image_file(p)],
+            key=lambda p: p.name,
+        )
+        for img_path in image_files:
+            filename = img_path.name
+            records.append(
+                {
+                    "identity": identity_name,
+                    "filename": filename,
+                    "image_path": (Path("lfw") / identity_name / filename).as_posix(),
+                }
+            )
+
     records.sort(key=lambda r: (r["identity"], r["filename"]))
-    print(f"[ingest] Loaded {len(records)} images across "
-          f"{len({r['identity'] for r in records})} identities.")
+    print(
+        f"[ingest] Loaded {len(records)} images across "
+        f"{len({r['identity'] for r in records})} identities from extracted files."
+    )
     return records
 
 
-# Deterministic split by identit
+# Deterministic split by identity
 
 def split_by_identity(records: list, seed: int, val_frac: float, test_frac: float,) -> dict[str, list]:
     """
