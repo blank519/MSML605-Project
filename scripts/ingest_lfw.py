@@ -18,7 +18,6 @@ import json
 import os
 import random
 import sys
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -124,47 +123,40 @@ def load_lfw_tfds(cache_dir: str):
     return records
 
 
-# Deterministic split by identity
+# Deterministic split by image/file
 
-def split_by_identity(records: list, seed: int, val_frac: float, test_frac: float,) -> dict[str, list]:
+def split_by_image(records: list, seed: int, val_frac: float, test_frac: float,) -> dict[str, list]:
     """
-    Split image records into train, val, and test sets by identity, ensuring no identity appears in more than one split.
+    Split image records into train, val, and test sets by image/file, ensuring deterministic ordering within each split.
 
     Args:
         records (list): List of image record dicts from load_lfw_tfds.
         seed (int): Random seed for reproducible shuffling.
-        val_frac (float): Fraction of identities to assign to the val split.
-        test_frac (float): Fraction of identities to assign to the test split.
+        val_frac (float): Fraction of images to assign to the val split.
+        test_frac (float): Fraction of images to assign to the test split.
 
     Returns:
         dict[str, list]: A dictionary with keys 'train', 'val', and 'test' mapping to a list of image record dicts
     """
-    # Sorted unique identities (deterministic order before shuffle)
-    all_identities = sorted({r["identity"] for r in records})
-    n = len(all_identities)
-
-    # Seed already set in config
     rng = random.Random(seed)
-    shuffled = all_identities[:]
+    shuffled = list(records)
     rng.shuffle(shuffled)
 
+    n = len(shuffled)
     n_test = max(1, round(n * test_frac))
     n_val = max(1, round(n * val_frac))
+    n_train = max(1, n - n_test - n_val)
 
-    test_ids = set(shuffled[:n_test])
-    val_ids = set(shuffled[n_test: n_test + n_val])
-    train_ids = set(shuffled[n_test + n_val:])
+    train_recs = shuffled[:n_train]
+    val_recs = shuffled[n_train : n_train + n_val]
+    test_recs = shuffled[n_train + n_val : n_train + n_val + n_test]
 
-    splits = defaultdict(list)
-    for r in records:
-        if r["identity"] in test_ids:
-            splits["test"].append(r)
-        elif r["identity"] in val_ids:
-            splits["val"].append(r)
-        else:
-            splits["train"].append(r)
+    train_recs.sort(key=lambda r: (r["identity"], r["filename"]))
+    val_recs.sort(key=lambda r: (r["identity"], r["filename"]))
+    test_recs.sort(key=lambda r: (r["identity"], r["filename"]))
 
-    return dict(splits)
+    return {"train": train_recs, "val": val_recs, "test": test_recs}
+
 
 # Manifest writing
 
@@ -255,7 +247,7 @@ def main():
     records = load_lfw_tfds(cache_dir)
 
     # Splits
-    splits = split_by_identity(records, seed=seed, val_frac=val_frac, test_frac=test_frac)
+    splits = split_by_image(records, seed=seed, val_frac=val_frac, test_frac=test_frac)
 
     for split_name, recs in splits.items():
         n_identities = len({r['identity'] for r in recs})
