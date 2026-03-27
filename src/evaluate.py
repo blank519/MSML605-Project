@@ -7,11 +7,6 @@ Integrates with the existing codebase:
   - tar_at_far() already exists in scripts/metrics.py; we re-export a compatible
     version here so evaluate.py has no circular dependency on scripts/
   - utils.py provides load_config / find_lfw_root
-
-Milestone 2 steps covered:
-  5.3  Tracked runs  → RunTracker in src/tracker.py
-  5.4  Threshold sweep  → threshold_sweep()
-  5.5  Select & lock threshold  → select_threshold_tar_at_far()
 """
 
 from __future__ import annotations

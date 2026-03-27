@@ -1,24 +1,9 @@
 """
-run_threshold_sweep.py — Milestone 2 Step 5.4 (and Step 5.7).
-
-Reads a scored pairs CSV (produced by scripts/score_pairs.py), runs a
-threshold sweep over the validation split, logs the run, and saves:
+run_threshold_sweep.py Reads a scored pairs CSV (produced by scripts/score_pairs.py), runs a threshold sweep over the validation split, logs the run, and saves:
   - sweep.csv           : per-threshold metrics table
   - selected_threshold.json : the TAR@FAR=0.01 chosen threshold + metrics
   - roc_curve.png       : ROC-style plot (TAR vs FAR)
   - tar_far_vs_threshold.png : TAR and FAR as functions of threshold value
-
-Usage
------
-    # Run 1 – baseline sweep
-    python scripts/run_threshold_sweep.py --config configs/milestone2.yaml \
-        --note "Run 1 – baseline threshold sweep"
-
-    # Run 4 – after data-centric change (v2 scores)
-    python scripts/run_threshold_sweep.py --config configs/milestone2.yaml \
-        --data-version v2 \
-        --scored-csv outputs/scores/val_scored_v2.csv \
-        --note "Run 4 – post data-centric change sweep"
 """
 
 from __future__ import annotations

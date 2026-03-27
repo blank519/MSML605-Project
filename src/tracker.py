@@ -1,19 +1,5 @@
 """
 tracker.py — Appends every run as a JSON record to outputs/runs/run_log.json.
-The log file is a plain JSON array that can be diffed, inspected, and committed as lightweight grading evidence.
-
-Usage
------
-    from src.tracker import RunTracker
-
-    tracker = RunTracker()
-    run_id = tracker.start_run(
-        config_name="milestone2_baseline",
-        data_version="v1",
-        split="val",
-        note="Run 1 – baseline threshold sweep",
-    )
-    tracker.finish_run(run_id, metrics={"TAR": 0.82, "FAR": 0.01})
 """
 
 from __future__ import annotations

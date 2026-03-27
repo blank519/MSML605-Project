@@ -1,28 +1,5 @@
 """
 tests/test_evaluate_and_tracker.py — Milestone 2 unit + integration tests.
-
-Unit tests cover:
-  - compute_confusion()
-  - confusion_to_metrics()
-  - threshold_sweep()
-  - select_threshold_tar_at_far()
-  - validate_pairs_df()
-  - validate_threshold()
-  - validate_score_label_lengths()
-  - RunTracker (start / finish / fail / summary / persistence)
-
-Integration test:
-  - Tiny end-to-end cycle: synthetic scored pairs -> sweep -> select ->
-    evaluate -> save artifacts -> log run.
-  - Does NOT require downloading LFW or loading the TF model.
-  - Runs in seconds from a clean clone.
-
-Note on consistency with scripts/metrics.py:
-  tar_at_far() in scripts/metrics.py finds the threshold via the
-  (1 - FAR) quantile of *negative* scores.  select_threshold_tar_at_far()
-  in src/evaluate.py works from the sweep grid instead.  Both honour the
-  same TAR@FAR=0.01 rule; minor numeric differences between them on the
-  same data are expected due to quantile vs grid resolution.
 """
 
 from __future__ import annotations
