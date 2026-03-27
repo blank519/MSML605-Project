@@ -51,11 +51,11 @@ milestone2:
   # After running run_threshold_sweep.py, paste the selected threshold here.
   # run_evaluation.py will pick it up automatically.
   # Example: locked_threshold: 0.7231
-  locked_threshold: null    # TODO: fill in after Run 1
+  locked_threshold: 0.775012
 
   # Data version label — bump to "v2" before Runs 4 and 5 after the
   # data-centric improvement is applied.
-  data_version: v1
+  data_version: v2
 
   # Score direction — document clearly for the report.
   # SiameseVerifier outputs sigmoid(logit), so higher = more likely same person.

@@ -1,6 +1,8 @@
 import tensorflow as tf
+import keras
 
 
+@keras.saving.register_keras_serializable(package="scripts")
 class FaceEmbedder(tf.keras.Model):
     def __init__(
         self,
@@ -65,6 +67,7 @@ class FaceEmbedder(tf.keras.Model):
         return tf.nn.l2_normalize(x, axis=-1)
 
 
+@keras.saving.register_keras_serializable(package="scripts")
 class SiameseVerifier(tf.keras.Model):
     def __init__(
         self,

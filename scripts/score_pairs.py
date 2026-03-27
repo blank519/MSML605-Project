@@ -1,22 +1,26 @@
 """
-score_pairs.py — Run model inference on a pairs CSV and write a scored CSV that the threshold sweep and evaluation scripts can consume
+scripts/score_pairs.py — Run model inference on a pairs CSV and write a
+scored CSV that the threshold sweep and evaluation scripts can consume.
 
-Bridge between train.py (which saves the model) and the Milestone 2 evaluation pipeline (which needs 'score' and 'label' columns)
+This is the bridge between train.py (which saves the model) and the
+Milestone 2 evaluation pipeline (which needs 'score' and 'label' columns).
 
-Usage:
+Usage
+-----
     # Score the validation split with the saved model:
-    python scripts/score_pairs.py
-        - config configs/milestone2.yaml
-        - split val
-        - model-path outputs/models/siamese_verifier.keras
+    python scripts/score_pairs.py \
+        --config configs/milestone2.yaml \
+        --split val \
+        --model-path outputs/models/siamese_verifier.keras
 
     # Score the test split:
-    python scripts/score_pairs.py
-        - config configs/milestone2.yaml
-        - split test
-        - model-path outputs/models/siamese_verifier.keras
+    python scripts/score_pairs.py \
+        --config configs/milestone2.yaml \
+        --split test \
+        --model-path outputs/models/siamese_verifier.keras
 
-Outputs:
+Outputs
+-------
     outputs/scores/{split}_scored.csv
         Columns: left_path, right_path, label, split, score
         'score' is the sigmoid probability from SiameseVerifier.
@@ -39,8 +43,15 @@ import pandas as pd
 import tensorflow as tf
 
 from scripts.utils import find_lfw_root, load_config
+# Import custom model classes so Keras can locate them during load_model().
+# SiameseVerifier and FaceEmbedder must be in scope before load_model() runs,
+# otherwise Keras raises 'Could not locate class SiameseVerifier'.
+from scripts.model import FaceEmbedder, SiameseVerifier  # noqa: F401
 
-# Load the image
+
+# ---------------------------------------------------------------------------
+# Image loading  (reuses the same logic as train.py)
+# ---------------------------------------------------------------------------
 
 def _read_image(path: str, image_size: tuple[int, int]) -> tf.Tensor:
     image_bytes = tf.io.read_file(path)
@@ -51,6 +62,59 @@ def _read_image(path: str, image_size: tuple[int, int]) -> tf.Tensor:
     return tf.cast(img, tf.float32)
 
 
+def _resolve_pair_path(lfw_root: Path, stored_path: str) -> Path:
+    """Resolve a stored left_path/right_path to an absolute file path.
+
+    make_pairs.py stores paths relative to lfw_root (e.g.
+    'Colin_Powell/Colin_Powell_0001.jpg'), so the correct join is simply
+    lfw_root / stored_path.  This helper centralises that logic so any
+    future change to the storage convention only needs to be updated here.
+    """
+    p = Path(stored_path)
+    # Guard: if the path somehow still has a leading 'lfw/' segment, strip it
+    # (can happen if pairs were generated with an older version of make_pairs.py).
+    parts = list(p.parts)
+    if parts and parts[0].lower() == "lfw":
+        p = Path(*parts[1:])
+    return lfw_root / p
+
+
+def _validate_image_paths(df: pd.DataFrame, lfw_root: Path, sample_size: int = 20) -> None:
+    """Check that image files referenced in the pairs CSV actually exist on disk.
+
+    Samples up to *sample_size* rows (first + last) to catch both the start
+    and end of the file list without scanning every row.  Raises a clear
+    FileNotFoundError with actionable guidance if any are missing.
+    """
+    check_rows = pd.concat([df.head(sample_size // 2), df.tail(sample_size // 2)]).drop_duplicates()
+    missing: list[str] = []
+    for row in check_rows.itertuples(index=False):
+        for col in ("left_path", "right_path"):
+            full = _resolve_pair_path(lfw_root, getattr(row, col))
+            if not full.exists():
+                missing.append(str(full))
+        if len(missing) >= 5:
+            break   # report the first batch; no need to scan further
+
+    if missing:
+        examples = "\n  ".join(missing[:5])
+        raise FileNotFoundError(
+            f"\n\n[score_pairs] {len(missing)} sampled image path(s) do not exist "
+            f"under lfw_root:\n  {lfw_root}\n\nMissing examples:\n  {examples}\n\n"
+            "Likely causes and fixes:\n"
+            "  1. INCOMPLETE EXTRACTION — The TFDS download did not fully extract.\n"
+            "     Fix: delete the tfds_cache and re-run:\n"
+            "       python scripts/ingest_lfw.py --config configs/milestone2.yaml\n\n"
+            "  2. PAIRS CSV FROM A DIFFERENT MACHINE — The pairs were generated on\n"
+            "     a machine with a different cache location.\n"
+            "     Fix: re-run make_pairs.py so paths match this machine's cache:\n"
+            "       python scripts/make_pairs.py --config configs/milestone2.yaml\n\n"
+            "  3. WRONG lfw_root — The extracted directory layout changed.\n"
+            "     Fix: run scripts/verify_pair_paths.py to diagnose the layout:\n"
+            "       python scripts/verify_pair_paths.py --config configs/milestone2.yaml\n"
+        )
+
+
 def _make_score_dataset(
     df: pd.DataFrame,
     lfw_root: Path,
@@ -58,8 +122,12 @@ def _make_score_dataset(
     batch_size: int,
 ) -> tf.data.Dataset:
     """Build a tf.data.Dataset of (img_a, img_b) pairs in the same order as df."""
-    left  = df["left_path"].astype(str).apply(lambda p: str(lfw_root / p)).tolist()
-    right = df["right_path"].astype(str).apply(lambda p: str(lfw_root / p)).tolist()
+    left  = df["left_path"].astype(str).apply(
+        lambda p: str(_resolve_pair_path(lfw_root, p))
+    ).tolist()
+    right = df["right_path"].astype(str).apply(
+        lambda p: str(_resolve_pair_path(lfw_root, p))
+    ).tolist()
 
     ds = tf.data.Dataset.from_tensor_slices((left, right))
 
@@ -71,7 +139,10 @@ def _make_score_dataset(
     ds = ds.prefetch(tf.data.AUTOTUNE)
     return ds
 
-# Validation of the pairs CSV format and content before scoring
+
+# ---------------------------------------------------------------------------
+# Validation helpers
+# ---------------------------------------------------------------------------
 
 def _validate_pairs_csv(df: pd.DataFrame, path: Path) -> None:
     required = {"left_path", "right_path", "label"}
@@ -90,7 +161,9 @@ def _validate_pairs_csv(df: pd.DataFrame, path: Path) -> None:
         raise ValueError(f"Pairs CSV {path} is empty.")
 
 
-# Scoring logic
+# ---------------------------------------------------------------------------
+# Main scoring logic
+# ---------------------------------------------------------------------------
 
 def score_pairs(
     model_path: Path,
@@ -102,21 +175,29 @@ def score_pairs(
 ) -> pd.DataFrame:
     """Run inference and attach a 'score' column to the pairs DataFrame.
 
-    Args:
-        model_path: Path to a saved SiameseVerifier (.keras file).
-        pairs_csv: Path to a pairs CSV with left_path, right_path, label.
-        lfw_root: Root directory of extracted LFW images.
-        out_csv: Where to write the scored CSV.
-        image_size: (H, W) — must match what the model was trained on.
-        batch_size: Inference batch size.
+    Parameters
+    ----------
+    model_path : Path to a saved SiameseVerifier (.keras file).
+    pairs_csv  : Path to a pairs CSV with left_path, right_path, label.
+    lfw_root   : Root directory of extracted LFW images.
+    out_csv    : Where to write the scored CSV.
+    image_size : (H, W) — must match what the model was trained on.
+    batch_size : Inference batch size.
 
-    Retuns:
-        DataFrame with all original columns plus 'score'.
+    Returns
+    -------
+    DataFrame with all original columns plus 'score'.
     """
     # Load and validate pairs
     df = pd.read_csv(pairs_csv)
     _validate_pairs_csv(df, pairs_csv)
     print(f"  Pairs loaded : {len(df):,} pairs from {pairs_csv}")
+
+    # Check that image files actually exist before loading the (slow) model.
+    # Catches incomplete TFDS extractions or stale pairs CSVs immediately.
+    print(f"  Validating image paths under: {lfw_root} ...")
+    _validate_image_paths(df, lfw_root)
+    print(f"  Image path check passed.")
 
     # Load model
     print(f"  Loading model: {model_path}")
@@ -150,7 +231,9 @@ def score_pairs(
     return df
 
 
-#CLI
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
