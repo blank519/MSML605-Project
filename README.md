@@ -20,6 +20,10 @@ pip install -r requirements.txt
 ```powershell
 python scripts/ingest_lfw.py --config configs/milestone1.yaml
 ```
+Updated ingestion now ignores identities with less than 10 images and evenly splits images belonging to each identity into training, validation, and test sets.
+```
+python scripts/ingest_lfw_update.py --config configs/milestone1.yaml
+```
 
 **4. Run pair generation:**
 ```powershell
@@ -34,6 +38,12 @@ python scripts/bench_similarity.py
 **6. Run training loop:**
 ```powershell
 python src/train.py --config configs/milestone1.yaml
+```
+
+**Other:**
+```
+python scripts/validate_data.py
+python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
 ## Outputs
