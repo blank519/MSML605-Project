@@ -1,5 +1,6 @@
 import tensorflow as tf
 import keras
+import tensorflow_hub as hub
 
 
 @keras.saving.register_keras_serializable(package="scripts")
@@ -8,61 +9,38 @@ class FaceEmbedder(tf.keras.Model):
         self,
         input_shape=(160, 160, 3),
         embedding_dim=128,
-        base_filters=32,
-        dropout_rate=0.2,
+        hub_handle: str = "https://tfhub.dev/google/facenet/1",
+        trainable: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.input_shape_ = tuple(input_shape)
         self.embedding_dim = int(embedding_dim)
-        self.base_filters = int(base_filters)
-        self.dropout_rate = float(dropout_rate)
+
+        self.hub_handle = str(hub_handle)
+        self.hub_trainable = bool(trainable)
 
         self.rescale = tf.keras.layers.Rescaling(1.0 / 255.0)
+        self.resize = tf.keras.layers.Resizing(self.input_shape_[0], self.input_shape_[1])
 
-        self.conv1 = tf.keras.layers.Conv2D(self.base_filters, 3, padding="same", use_bias=False)
-        self.bn1 = tf.keras.layers.BatchNormalization()
-        self.conv2 = tf.keras.layers.Conv2D(self.base_filters * 2, 3, padding="same", use_bias=False)
-        self.bn2 = tf.keras.layers.BatchNormalization()
-        self.conv3 = tf.keras.layers.Conv2D(self.base_filters * 4, 3, padding="same", use_bias=False)
-        self.bn3 = tf.keras.layers.BatchNormalization()
-        self.conv4 = tf.keras.layers.Conv2D(self.base_filters * 4, 3, padding="same", use_bias=False)
-        self.bn4 = tf.keras.layers.BatchNormalization()
+        self.facenet = hub.KerasLayer(
+            self.hub_handle,
+            trainable=self.hub_trainable,
+            name="facenet",
+        )
 
-        self.act = tf.keras.layers.ReLU()
-        self.pool = tf.keras.layers.MaxPool2D()
-        self.gap = tf.keras.layers.GlobalAveragePooling2D()
-
-        self.dropout = tf.keras.layers.Dropout(self.dropout_rate)
-        self.proj = tf.keras.layers.Dense(self.embedding_dim, use_bias=True)
-        self.ln = tf.keras.layers.LayerNormalization()
+        self.proj = None
+        if self.embedding_dim != 512:
+            self.proj = tf.keras.layers.Dense(self.embedding_dim, use_bias=True, name="proj")
 
     def call(self, images, training=False):
-        x = self.rescale(images)
+        x = tf.cast(images, tf.float32)
+        x = self.resize(x)
+        x = self.rescale(x)
 
-        x = self.conv1(x)
-        x = self.bn1(x, training=training)
-        x = self.act(x)
-        x = self.pool(x)
-
-        x = self.conv2(x)
-        x = self.bn2(x, training=training)
-        x = self.act(x)
-        x = self.pool(x)
-
-        x = self.conv3(x)
-        x = self.bn3(x, training=training)
-        x = self.act(x)
-        x = self.pool(x)
-
-        x = self.conv4(x)
-        x = self.bn4(x, training=training)
-        x = self.act(x)
-        x = self.gap(x)
-
-        x = self.dropout(x, training=training)
-        x = self.proj(x)
-        x = self.ln(x, training=training)
+        x = self.facenet(x, training=training)
+        if self.proj is not None:
+            x = self.proj(x)
 
         return tf.nn.l2_normalize(x, axis=-1)
 
