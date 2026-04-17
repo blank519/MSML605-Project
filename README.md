@@ -159,3 +159,10 @@ All outputs are written to `outputs/` which is gitignored and recreated on each 
 | `outputs/models/` | Saved Siamese model (.keras) |
 | `outputs/runs/` | Per-run artifacts (sweep CSV, plots, metrics JSON, run_log.json) |
 | `outputs/bench/` | Similarity benchmark results |
+
+## Milestone 3
+
+### Replacing the Embedder
+In Milestone 2, the placeholder model in 'src/models.py' also used the image embedding -> similarity score approach, but the embedder was a neural network created from scratch. In Milestone 3, the embedder was replaced with a pre-trained FaceNet model from TensorFlow Hub.  
+
+The reason why FaceNet was chosen over other pretrained models is due to how well-established it is as a baseline for face recognition tasks.
