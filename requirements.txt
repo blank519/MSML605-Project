@@ -5,6 +5,4 @@ pandas
 pyyaml
 tensorflow==2.20.0
 tensorflow-datasets==4.9.9
-protobuf>=5.28.0,<6
 matplotlib==3.8.0
-tensorflow-hub==0.15.0
