@@ -23,6 +23,9 @@ from pathlib import Path
 
 # Required third-party imports, included in requirements.txt
 import numpy as np
+
+os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
+os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION_VERSION", "2")
 import tensorflow_datasets as tfds
 
 from utils import find_lfw_root, is_image_file, load_config
