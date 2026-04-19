@@ -1,0 +1,73 @@
+# configs/milestone3.yaml
+# -----------------------------------------------------------------------
+# Milestone 3 configuration — extends milestone2.yaml conventions.
+#
+# Shared keys (seed, splits, paths, data_source) are kept compatible
+# with ingest_lfw.py and make_pairs.py so both milestones can reference
+# the same config if needed.
+# -----------------------------------------------------------------------
+
+# ---- Shared settings (carry-over from Milestone 1) --------------------
+seed: 42
+
+data_source: "tensorflow_datasets: lfw (latest)"
+
+splits:
+  policy: "image-level random split"
+  val_frac: 0.15
+  test_frac: 0.15
+
+paths:
+  data_cache: data/tfds_cache        # TFDS download + extract cache
+  outputs:    outputs                # all generated artifacts go here
+
+pairs:
+  positive_per_split: 5000
+  negative_per_split: 5000          # 1:1 positive-to-negative ratio
+
+# ---- Training settings (used by train.py) -----------------------------
+training:
+  image_size: [160, 160]
+  batch_size: 32
+  epochs:     5
+  learning_rate: 0.001
+  embedder_type: "facenet"
+
+# ---- Milestone 3 evaluation settings ----------------------------------
+milestone3:
+  config_name: milestone3_baseline
+
+  # Split used for threshold selection — NEVER use the test split here.
+  threshold_selection_split: val
+
+  # Split used for final held-out reporting.
+  reporting_split: test
+
+  # TAR@FAR=0.01 threshold selection rule:
+  #   "Among all thresholds where FAR <= target_far on the val split,
+  #    choose the one that maximises TAR."
+  selection_rule: "TAR@FAR=0.01"
+  target_far: 0.01
+
+  # After running run_threshold_sweep.py, paste the selected threshold here.
+  # run_evaluation.py will pick it up automatically.
+  # Example: locked_threshold: 0.7231
+  locked_threshold: 0.775012
+
+  # Data version label — bump to "v2" before Runs 4 and 5 after the
+  # data-centric improvement is applied.
+  data_version: v2
+
+  # Score direction — document clearly for the report.
+  # SiameseVerifier outputs sigmoid(logit), so higher = more likely same person.
+  score_direction: "higher_is_more_similar"
+
+  # Threshold sweep settings
+  sweep:
+    n_steps: 200
+
+# ---- Score direction note (for report) --------------------------------
+# SiameseVerifier.call() returns logits; SiameseVerifier.predict_proba()
+# applies sigmoid.  score_pairs.py uses predict_proba-style inference, so
+# all 'score' values are in [0, 1] and the positive class (same person)
+# corresponds to scores >= threshold.

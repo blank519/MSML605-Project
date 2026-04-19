@@ -68,7 +68,7 @@ class FaceEmbedder(tf.keras.Model):
 
 
 @keras.saving.register_keras_serializable(package="scripts")
-class KerasFaceNetEmbedder(tf.keras.Model):
+class FaceNetEmbedder(tf.keras.Model):
     def __init__(
         self,
         input_shape=(160, 160, 3),
@@ -149,7 +149,7 @@ class SiameseVerifier(tf.keras.Model):
                 dropout_rate=self.dropout_rate,
             )
         elif self.embedder_type == "facenet":
-            self.embedder = KerasFaceNetEmbedder(
+            self.embedder = FaceNetEmbedder(
                 input_shape=self.input_shape_,
                 embedding_dim=self.embedding_dim,
                 trainable=False,
