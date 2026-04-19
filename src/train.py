@@ -71,6 +71,11 @@ def train(
 ) -> tuple[SiameseVerifier, tf.keras.callbacks.History]:
     cfg = load_config(config_path) if config_path is not None else None
 
+    #embedder_type = "cnn"
+    embedder_type = "facenet"
+    if cfg is not None:
+        embedder_type = str(cfg.get("training", {}).get("embedder_type", embedder_type))
+
     outputs_dir = project_root / (cfg["paths"]["outputs"] if cfg is not None else "outputs")
     pairs_dir = pairs_dir if pairs_dir is not None else outputs_dir / "pairs"
 
@@ -97,7 +102,10 @@ def train(
         shuffle=False,
     )
 
-    model = SiameseVerifier(input_shape=(image_size[0], image_size[1], 3))
+    model = SiameseVerifier(
+        input_shape=(image_size[0], image_size[1], 3),
+        embedder_type=embedder_type,
+    )
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
 
     callbacks: list[tf.keras.callbacks.Callback] = [

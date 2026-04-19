@@ -68,6 +68,58 @@ class FaceEmbedder(tf.keras.Model):
 
 
 @keras.saving.register_keras_serializable(package="scripts")
+class KerasFaceNetEmbedder(tf.keras.Model):
+    def __init__(
+        self,
+        input_shape=(160, 160, 3),
+        embedding_dim=128,
+        trainable: bool = False,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.input_shape_ = tuple(input_shape)
+        self.embedding_dim = int(embedding_dim)
+        self.trainable_ = bool(trainable)
+
+        self.resize = tf.keras.layers.Resizing(self.input_shape_[0], self.input_shape_[1])
+
+        self._facenet = None
+
+        self.proj = None
+        if self.embedding_dim != 512:
+            self.proj = tf.keras.layers.Dense(self.embedding_dim, use_bias=True, name="proj")
+
+    def _ensure_loaded(self):
+        if self._facenet is not None:
+            return
+        from keras_facenet import FaceNet
+
+        self._facenet = FaceNet()
+
+    def _embeddings_np(self, images_np):
+        self._ensure_loaded()
+        try:
+            return self._facenet.embeddings(images_np, verbose=0)
+        except TypeError:
+            return self._facenet.embeddings(images_np)
+
+    def call(self, images, training=False):
+        x = tf.cast(images, tf.float32)
+        x = self.resize(x)
+
+        def _fn(imgs):
+            return self._embeddings_np(imgs)
+
+        emb = tf.numpy_function(_fn, [x], tf.float32)
+        emb = tf.ensure_shape(emb, [None, 512])
+
+        if self.proj is not None:
+            emb = self.proj(emb)
+
+        return tf.nn.l2_normalize(emb, axis=-1)
+
+
+@keras.saving.register_keras_serializable(package="scripts")
 class SiameseVerifier(tf.keras.Model):
     def __init__(
         self,
@@ -75,6 +127,7 @@ class SiameseVerifier(tf.keras.Model):
         embedding_dim=128,
         base_filters=32,
         dropout_rate=0.2,
+        embedder_type: str = "cnn",
         embedder=None,
         **kwargs,
     ):
@@ -84,12 +137,28 @@ class SiameseVerifier(tf.keras.Model):
         self.base_filters = int(base_filters)
         self.dropout_rate = float(dropout_rate)
 
-        self.embedder = embedder if embedder is not None else FaceEmbedder(
-            input_shape=self.input_shape_,
-            embedding_dim=self.embedding_dim,
-            base_filters=self.base_filters,
-            dropout_rate=self.dropout_rate,
-        )
+        self.embedder_type = str(embedder_type)
+
+        if embedder is not None:
+            self.embedder = embedder
+        elif self.embedder_type == "cnn":
+            self.embedder = FaceEmbedder(
+                input_shape=self.input_shape_,
+                embedding_dim=self.embedding_dim,
+                base_filters=self.base_filters,
+                dropout_rate=self.dropout_rate,
+            )
+        elif self.embedder_type == "facenet":
+            self.embedder = KerasFaceNetEmbedder(
+                input_shape=self.input_shape_,
+                embedding_dim=self.embedding_dim,
+                trainable=False,
+            )
+        else:
+            raise ValueError(
+                "Unknown embedder_type for SiameseVerifier: "
+                f"{self.embedder_type!r}. Expected 'cnn' or 'facenet'."
+            )
         self.logit_scale = tf.keras.layers.Dense(1, use_bias=True, name="logit_scale")
 
         self.loss_fn = tf.keras.losses.BinaryCrossentropy(from_logits=True)

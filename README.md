@@ -119,7 +119,7 @@ python scripts/run_evaluation.py --config configs/milestone2.yaml --split test -
 
 ### Apply data-centric change and retrain
 ```powershell
-python scripts/ingest_lfw_updated.py --config configs/milestone2.yaml
+python scripts/ingest_lfw_update.py --config configs/milestone2.yaml
 python scripts/make_pairs.py --config configs/milestone2.yaml
 python src/train.py --config configs/milestone2.yaml
 ```
@@ -163,6 +163,6 @@ All outputs are written to `outputs/` which is gitignored and recreated on each 
 ## Milestone 3
 
 ### Replacing the Embedder
-In Milestone 2, the placeholder model in 'src/models.py' also used the image embedding -> similarity score approach, but the embedder was a neural network created from scratch. In Milestone 3, the embedder was replaced with a pre-trained FaceNet model from TensorFlow Hub.  
+In Milestone 2, the placeholder model in 'src/models.py' also used the image embedding -> similarity score approach, but the embedder was a neural network created from scratch. In Milestone 3, the embedder was replaced with a pre-trained FaceNet model.  
 
 The reason why FaceNet was chosen over other pretrained models is due to how well-established it is as a baseline for face recognition tasks.
