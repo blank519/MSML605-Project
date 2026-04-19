@@ -166,3 +166,9 @@ All outputs are written to `outputs/` which is gitignored and recreated on each 
 In Milestone 2, the placeholder model in 'src/models.py' also used the image embedding -> similarity score approach, but the embedder was a neural network created from scratch. In Milestone 3, the embedder was replaced with a pre-trained FaceNet model.  
 
 The reason why FaceNet was chosen over other pretrained models is due to how well-established it is as a baseline for face recognition tasks.
+
+### Run training with new FaceNet Embedder
+python src/train.py --config configs/milestone3.yaml
+
+### Threshold sweep on newly trained model
+python scripts/run_threshold_sweep.py --config configs/milestone3.yaml --note "FaceNet embedder threshold sweep"
