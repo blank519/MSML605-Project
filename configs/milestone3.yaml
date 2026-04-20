@@ -1,13 +1,11 @@
 # configs/milestone3.yaml
 # -----------------------------------------------------------------------
-# Milestone 3 configuration — extends milestone2.yaml conventions.
-#
-# Shared keys (seed, splits, paths, data_source) are kept compatible
-# with ingest_lfw.py and make_pairs.py so both milestones can reference
-# the same config if needed.
+# Milestone 3 configuration — embedding-based inference and deployment.
+# Extends milestone2.yaml conventions; adds embedding, inference, and
+# load-test configuration.
 # -----------------------------------------------------------------------
 
-# ---- Shared settings (carry-over from Milestone 1) --------------------
+# ---- Shared settings (carry-over from Milestones 1 & 2) ---------------
 seed: 42
 
 data_source: "tensorflow_datasets: lfw (latest)"
@@ -18,12 +16,12 @@ splits:
   test_frac: 0.15
 
 paths:
-  data_cache: data/tfds_cache        # TFDS download + extract cache
-  outputs:    outputs                # all generated artifacts go here
+  data_cache: data/tfds_cache
+  outputs:    outputs
 
 pairs:
   positive_per_split: 5000
-  negative_per_split: 5000          # 1:1 positive-to-negative ratio
+  negative_per_split: 5000
 
 # ---- Training settings (used by train.py) -----------------------------
 training:
@@ -31,43 +29,63 @@ training:
   batch_size: 32
   epochs:     5
   learning_rate: 0.001
-  embedder_type: "facenet"
+  embedder_type: "facenet"   # uses FaceNetEmbedder (keras-facenet / VGGFace2)
 
-# ---- Milestone 3 evaluation settings ----------------------------------
+# ---- Milestone 3 — embedding and inference settings -------------------
 milestone3:
-  config_name: milestone3_baseline
+  config_name: milestone3_facenet
 
-  # Split used for threshold selection — NEVER use the test split here.
+  # Embedding model used by the CLI and load test (src/embedder.py).
+  # Must match the embedder_type used during training above.
+  # keras-facenet: InceptionResnetV1 pretrained on VGGFace2, 512-dim output.
+  embedding_model: keras_facenet
+  embedding_dim: 512
+
+  # Score direction:
+  # Cosine similarity of L2-normalised embeddings -> sigmoid -> [0, 1].
+  # Higher score = more likely same person.
+  # This matches SiameseVerifier.predict_proba() and the scored CSVs.
+  score_direction: "higher_is_more_similar"
+  score_range: "[0, 1] (sigmoid of cosine similarity)"
+
+  # Confidence computation rule (documented):
+  #   SAME      (score >= threshold): (score - threshold) / (1 - threshold)
+  #   DIFFERENT (score < threshold):  (threshold - score) / threshold
+  # Range: [0, 1]. 0 = at the decision boundary. 1 = maximum confidence.
+  confidence_rule: "linear_distance_from_threshold"
+
+  # Threshold selection — same TAR@FAR=0.01 rule as Milestone 2.
+  # Re-selected on the val split using FaceNet sigmoid scores.
   threshold_selection_split: val
-
-  # Split used for final held-out reporting.
   reporting_split: test
-
-  # TAR@FAR=0.01 threshold selection rule:
-  #   "Among all thresholds where FAR <= target_far on the val split,
-  #    choose the one that maximises TAR."
   selection_rule: "TAR@FAR=0.01"
   target_far: 0.01
 
-  # After running run_threshold_sweep.py, paste the selected threshold here.
-  # run_evaluation.py will pick it up automatically.
-  # Example: locked_threshold: 0.7231
-  locked_threshold: 0.775012
+  # Set this after running run_threshold_sweep.py with FaceNet scores.
+  locked_threshold: 0.709294
 
-  # Data version label — bump to "v2" before Runs 4 and 5 after the
-  # data-centric improvement is applied.
+  # Data version
   data_version: v2
-
-  # Score direction — document clearly for the report.
-  # SiameseVerifier outputs sigmoid(logit), so higher = more likely same person.
-  score_direction: "higher_is_more_similar"
 
   # Threshold sweep settings
   sweep:
     n_steps: 200
 
-# ---- Score direction note (for report) --------------------------------
-# SiameseVerifier.call() returns logits; SiameseVerifier.predict_proba()
-# applies sigmoid.  score_pairs.py uses predict_proba-style inference, so
-# all 'score' values are in [0, 1] and the positive class (same person)
-# corresponds to scores >= threshold.
+  # Load test defaults
+  load_test:
+    default_workers: 2
+    default_n_pairs: 50
+    split: val
+
+# ---- Milestone 2 settings (preserved for backbone compatibility) -------
+milestone2:
+  config_name: milestone2_baseline
+  threshold_selection_split: val
+  reporting_split: test
+  selection_rule: "TAR@FAR=0.01"
+  target_far: 0.01
+  locked_threshold: 0.709294
+  data_version: v2
+  score_direction: "higher_is_more_similar"
+  sweep:
+    n_steps: 200

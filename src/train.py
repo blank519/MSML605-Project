@@ -71,11 +71,12 @@ def train(
 ) -> tuple[SiameseVerifier, tf.keras.callbacks.History]:
     cfg = load_config(config_path) if config_path is not None else None
 
-    default_embedder = "cnn"
-    if cfg is not None:
-        embedder_type = str(cfg.get("training", {}).get("embedder_type", default_embedder))
-        print("Embedder type: " + embedder_type)
+    if cfg is None:
+        raise ValueError("Config must be provided for training")
 
+    embedder_type = str(cfg["training"]["embedder_type"])
+    print("Embedder type:", embedder_type)
+    
     outputs_dir = project_root / (cfg["paths"]["outputs"] if cfg is not None else "outputs")
     pairs_dir = pairs_dir if pairs_dir is not None else outputs_dir / "pairs"
 

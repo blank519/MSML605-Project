@@ -1,9 +1,24 @@
-# List of dependencies for the project, make sure that you have these installed in your Python environment before running the scripts.
+# requirements.txt — MSML/MSAI 605 Face Verification Pipeline
+# Install with: python -m pip install -r requirements.txt
 
-numpy
-pandas
-pyyaml
-tensorflow==2.20.0
-tensorflow-datasets==4.9.9
-matplotlib==3.8.0
-keras-facenet
+# ── Core ML & data ────────────────────────────────────────────────────
+tensorflow==2.16.2
+tensorflow-datasets>=4.9
+numpy==1.26.4
+pandas>=2.0
+scikit-learn>=1.3
+opencv-python<4.13
+# ── Milestone 3 — FaceNet embeddings (keras-facenet) ──────────────────
+# keras-facenet wraps InceptionResnetV1 pretrained on VGGFace2.
+# Used by FaceNetEmbedder in scripts/model.py and src/embedder.py.
+keras-facenet>=0.3.2
+Pillow>=10.0
+
+# ── Visualisation ─────────────────────────────────────────────────────
+matplotlib>=3.7
+
+# ── Config & utilities ────────────────────────────────────────────────
+PyYAML>=6.0
+
+# ── Testing ───────────────────────────────────────────────────────────
+pytest>=7.4

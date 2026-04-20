@@ -1,0 +1,11 @@
+# .dockerignore — exclude large local files from Docker build context
+# Reduces disk size by significant amount, that's why I added one
+data/
+outputs/
+.venv/
+__pycache__/
+*.pyc
+.git/
+*.keras
+*.h5
+reports/

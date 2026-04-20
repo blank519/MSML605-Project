@@ -65,6 +65,16 @@ class FaceEmbedder(tf.keras.Model):
         x = self.ln(x, training=training)
 
         return tf.nn.l2_normalize(x, axis=-1)
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "input_shape": self.input_shape_,
+            "embedding_dim": self.embedding_dim,
+            "base_filters": self.base_filters,
+            "dropout_rate": self.dropout_rate,
+        })
+        return config
 
 
 @keras.saving.register_keras_serializable(package="scripts")
@@ -117,6 +127,15 @@ class FaceNetEmbedder(tf.keras.Model):
             emb = self.proj(emb)
 
         return tf.nn.l2_normalize(emb, axis=-1)
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "input_shape": self.input_shape_,
+            "embedding_dim": self.embedding_dim,
+            "trainable": self.trainable_,
+        })
+        return config
 
 
 @keras.saving.register_keras_serializable(package="scripts")
@@ -167,6 +186,17 @@ class SiameseVerifier(tf.keras.Model):
             name="accuracy",
             threshold=0.0,
         )
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "input_shape": self.input_shape_,
+            "embedding_dim": self.embedding_dim,
+            "base_filters": self.base_filters,
+            "dropout_rate": self.dropout_rate,
+            "embedder_type": self.embedder_type,
+            "embedder": None,
+        })
+        return config    
 
     @property
     def metrics(self):

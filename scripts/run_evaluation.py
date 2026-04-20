@@ -1,33 +1,6 @@
 """
-run_evaluation.py — Milestone 2 Steps 5.5 and 5.7.
-
-Evaluates the face verifier at a *locked* threshold on a specified split.
+run_evaluation.py — Evaluate the face verifier at a locked threshold on a specified split.
 Produces a confusion matrix plot and a metrics JSON, and logs the run.
-
-Typical usage
--------------
-    # Run 2 – baseline selected-threshold on val
-    python scripts/run_evaluation.py \
-        --config configs/milestone2.yaml \
-        --split val \
-        --threshold 0.7231 \
-        --note "Run 2 – baseline selected threshold, val split"
-
-    # Run 3 – baseline final reporting on test
-    python scripts/run_evaluation.py \
-        --config configs/milestone2.yaml \
-        --split test \
-        --threshold 0.7231 \
-        --note "Run 3 – baseline final reporting, test split"
-
-    # Run 5 – post data-centric change, test split
-    python scripts/run_evaluation.py \
-        --config configs/milestone2.yaml \
-        --split test \
-        --threshold 0.6850 \
-        --data-version v2 \
-        --scored-csv outputs/scores/test_scored_v2.csv \
-        --note "Run 5 – post data-centric change, test split"
 """
 
 from __future__ import annotations
@@ -59,7 +32,7 @@ from src.tracker import RunTracker
 def plot_confusion_matrix(
     cm: dict, out_path: Path, title: str = ""
 ) -> None:
-    """Save a 2×2 confusion matrix heatmap."""
+    """Save a 2x2 confusion matrix heatmap."""
     matrix = np.array([
         [cm["TN"], cm["FP"]],
         [cm["FN"], cm["TP"]],
