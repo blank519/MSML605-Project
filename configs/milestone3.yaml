@@ -62,7 +62,8 @@ milestone3:
   target_far: 0.01
 
   # Set this after running run_threshold_sweep.py with FaceNet scores.
-  locked_threshold: 0.709294
+  locked_threshold: 0.617447
+  # TAR = 0.9268, FAR = 0.0088
 
   # Data version
   data_version: v2
