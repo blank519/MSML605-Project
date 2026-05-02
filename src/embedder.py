@@ -13,6 +13,8 @@ from typing import Union
 import numpy as np
 from PIL import Image
 
+import tensorflow as tf
+
 
 class FaceEmbedder:
     """Standalone FaceNet embedder for CLI inference and load testing."""
@@ -22,6 +24,17 @@ class FaceEmbedder:
     def __init__(self) -> None:
         from keras_facenet import FaceNet
         self._facenet = FaceNet()
+
+        model = getattr(self._facenet, "model", None)
+        if model is not None and hasattr(model, "predict"):
+            orig_predict = model.predict
+
+            def _predict_no_verbose(*args, **kwargs):
+                if "verbose" not in kwargs:
+                    kwargs["verbose"] = 0
+                return orig_predict(*args, **kwargs)
+
+            model.predict = _predict_no_verbose
 
     # Preprocessing
 
@@ -118,3 +131,73 @@ class FaceEmbedder:
         else:
             denom = max(threshold, 1e-9)
             return min((threshold - score) / denom, 1.0)
+
+
+class SiameseModelScorer:
+    INPUT_SIZE = (160, 160)
+
+    def __init__(self, model_path: Union[str, Path]) -> None:
+        self.model_path = str(model_path)
+        project_root = Path(__file__).resolve().parents[1]
+        import sys
+
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
+
+        from scripts.model import FaceEmbedder as _FaceEmbedder  # noqa: F401
+        from scripts.model import FaceNetEmbedder as _FaceNetEmbedder  # noqa: F401
+        from scripts.model import SiameseVerifier as _SiameseVerifier  # noqa: F401
+
+        self.model = tf.keras.models.load_model(self.model_path)
+
+    @staticmethod
+    def _read_image(path: Union[str, Path], image_size: tuple[int, int]) -> tf.Tensor:
+        image_bytes = tf.io.read_file(str(path))
+        img = tf.image.decode_image(image_bytes, channels=3, expand_animations=False)
+        img = tf.image.resize(img, image_size, method=tf.image.ResizeMethod.BILINEAR)
+        return tf.cast(img, tf.float32)
+
+    @staticmethod
+    def _confidence(score: float, threshold: float) -> float:
+        if score >= threshold:
+            denom = max(1.0 - threshold, 1e-9)
+            return min((score - threshold) / denom, 1.0)
+        else:
+            denom = max(threshold, 1e-9)
+            return min((threshold - score) / denom, 1.0)
+
+    def verify_pair(
+        self,
+        path_a: Union[str, Path],
+        path_b: Union[str, Path],
+        threshold: float,
+    ) -> dict:
+        t0 = time.perf_counter()
+
+        t1 = time.perf_counter()
+        img_a = self._read_image(path_a, self.INPUT_SIZE)
+        img_b = self._read_image(path_b, self.INPUT_SIZE)
+        t2 = time.perf_counter()
+
+        img_a = tf.expand_dims(img_a, axis=0)
+        img_b = tf.expand_dims(img_b, axis=0)
+        logits = self.model((img_a, img_b), training=False)
+        score = float(tf.sigmoid(logits)[0, 0].numpy())
+        t3 = time.perf_counter()
+
+        decision = "same" if score >= threshold else "different"
+        confidence = self._confidence(score, threshold)
+        t4 = time.perf_counter()
+
+        return {
+            "image_a": str(path_a),
+            "image_b": str(path_b),
+            "score": round(score, 6),
+            "threshold": threshold,
+            "decision": decision,
+            "confidence": round(confidence, 4),
+            "latency_preprocess_ms": round((t2 - t1) * 1000, 2),
+            "latency_embed_ms": 0.0,
+            "latency_score_ms": round((t4 - t3) * 1000, 2),
+            "latency_total_ms": round((t4 - t0) * 1000, 2),
+        }

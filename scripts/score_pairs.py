@@ -48,6 +48,8 @@ from scripts.utils import find_lfw_root, load_config
 # otherwise Keras raises 'Could not locate class SiameseVerifier'.
 from scripts.model import FaceEmbedder, SiameseVerifier  # noqa: F401
 
+from src.embedder import FaceEmbedder as StandaloneFaceEmbedder
+
 
 # ---------------------------------------------------------------------------
 # Image loading  (reuses the same logic as train.py)
@@ -172,6 +174,7 @@ def score_pairs(
     out_csv: Path,
     image_size: tuple[int, int] = (160, 160),
     batch_size: int = 32,
+    scoring_mode: str = "model",
 ) -> pd.DataFrame:
     """Run inference and attach a 'score' column to the pairs DataFrame.
 
@@ -199,20 +202,67 @@ def score_pairs(
     _validate_image_paths(df, lfw_root)
     print(f"  Image path check passed.")
 
-    # Load model
-    print(f"  Loading model: {model_path}")
-    model = tf.keras.models.load_model(str(model_path))
-
-    # Build dataset (preserves row order)
-    ds = _make_score_dataset(df, lfw_root, image_size, batch_size)
-
-    # Run inference
-    print(f"  Running inference (batch_size={batch_size}) ...")
     all_scores: list[float] = []
-    for img_a_batch, img_b_batch in ds:
-        logits = model((img_a_batch, img_b_batch), training=False)
-        probs  = tf.sigmoid(logits)                        # (batch, 1)
-        all_scores.extend(probs.numpy().flatten().tolist())
+    scoring_mode = str(scoring_mode).lower()
+
+    if scoring_mode == "model":
+        # Load model
+        print(f"  Loading model: {model_path}")
+        model = tf.keras.models.load_model(str(model_path))
+
+        # Build dataset (preserves row order)
+        ds = _make_score_dataset(df, lfw_root, image_size, batch_size)
+
+        # Run inference
+        print(f"  Running inference (batch_size={batch_size}) ...")
+        for img_a_batch, img_b_batch in ds:
+            logits = model((img_a_batch, img_b_batch), training=False)
+            probs = tf.sigmoid(logits)  # (batch, 1)
+            all_scores.extend(probs.numpy().flatten().tolist())
+
+    elif scoring_mode == "embedding":
+        if tuple(image_size) != (160, 160):
+            raise ValueError(
+                "Embedding scoring mode requires image_size=(160, 160) to match "
+                "keras-facenet. Got image_size=%r" % (tuple(image_size),)
+            )
+
+        embedder = StandaloneFaceEmbedder()
+
+        def _facenet_embeddings(images: list[np.ndarray]) -> np.ndarray:
+            try:
+                return embedder._facenet.embeddings(images, verbose=0)
+            except TypeError:
+                return embedder._facenet.embeddings(images)
+
+        print(f"  Running embedding scoring (batch_size={batch_size}) ...")
+        left_paths = df["left_path"].astype(str).tolist()
+        right_paths = df["right_path"].astype(str).tolist()
+
+        def _abs_paths(paths: list[str]) -> list[str]:
+            return [str(_resolve_pair_path(lfw_root, p)) for p in paths]
+
+        left_abs = _abs_paths(left_paths)
+        right_abs = _abs_paths(right_paths)
+
+        for i in range(0, len(df), batch_size):
+            batch_left = left_abs[i : i + batch_size]
+            batch_right = right_abs[i : i + batch_size]
+
+            imgs_left = [embedder.preprocess(p) for p in batch_left]
+            imgs_right = [embedder.preprocess(p) for p in batch_right]
+
+            emb_left = _facenet_embeddings(imgs_left)
+            emb_right = _facenet_embeddings(imgs_right)
+
+            cos = np.sum(emb_left * emb_right, axis=1)
+            scores = 1.0 / (1.0 + np.exp(-cos))
+            all_scores.extend(scores.astype(float).tolist())
+
+    else:
+        raise ValueError(
+            f"Unknown scoring_mode={scoring_mode!r}. Expected 'model' or 'embedding'."
+        )
 
     # Sanity check
     if len(all_scores) != len(df):
@@ -251,6 +301,12 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--batch-size",  type=int, default=32)
     parser.add_argument(
+        "--scoring-mode",
+        choices=["model", "embedding"],
+        default=None,
+        help="Scoring definition: 'model' uses saved SiameseVerifier; 'embedding' uses keras-facenet embeddings + sigmoid(cosine_similarity).",
+    )
+    parser.add_argument(
         "--image-size", type=int, nargs=2, default=None,
         help="Image H W (default: from config or 160 160)",
     )
@@ -277,13 +333,21 @@ def main() -> None:
             cfg.get("training", {}).get("image_size", [160, 160])
         )
 
-    # Resolve model path
+    # Resolve scoring mode
+    scoring_mode = args.scoring_mode
+    if scoring_mode is None:
+        if "milestone3" in cfg:
+            scoring_mode = "embedding"
+        else:
+            scoring_mode = "model"
+
+    # Resolve model path (only required for model-based scoring)
     if args.model_path is not None:
         model_path = Path(args.model_path)
     else:
         model_path = outputs_dir / "models" / "siamese_verifier.keras"
 
-    if not model_path.exists():
+    if scoring_mode == "model" and not model_path.exists():
         print(f"ERROR: Model not found: {model_path}")
         sys.exit(1)
 
@@ -301,7 +365,9 @@ def main() -> None:
 
     print(f"\n[score_pairs]")
     print(f"  Split        : {args.split}")
-    print(f"  Model        : {model_path}")
+    print(f"  Scoring mode : {scoring_mode}")
+    if scoring_mode == "model":
+        print(f"  Model        : {model_path}")
     print(f"  LFW root     : {lfw_root}")
     print(f"  Image size   : {image_size}")
 
@@ -312,6 +378,7 @@ def main() -> None:
         out_csv=out_csv,
         image_size=image_size,
         batch_size=args.batch_size,
+        scoring_mode=scoring_mode,
     )
     print("[score_pairs] Done.\n")
 

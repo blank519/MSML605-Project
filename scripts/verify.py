@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import pandas as pd
 
-from scripts.utils import load_config
+from scripts.utils import find_lfw_root, load_config
 from src.embedder import FaceEmbedder
 
 
@@ -84,7 +84,17 @@ def run_batch(embedder: FaceEmbedder, threshold: float, args: argparse.Namespace
         sys.exit(1)
 
     # Resolve LFW root for relative paths
-    lfw_root = Path(args.lfw_root) if args.lfw_root else None
+    lfw_root = None
+    if args.lfw_root:
+        candidate = Path(args.lfw_root)
+        if not candidate.exists():
+            print(f"ERROR: --lfw-root not found: {candidate}")
+            sys.exit(1)
+
+        if candidate.name.lower() == "lfw":
+            lfw_root = candidate
+        else:
+            lfw_root = find_lfw_root(candidate)
 
     def resolve(p: str) -> Path:
         path = Path(p)

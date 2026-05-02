@@ -150,8 +150,8 @@ python src/train.py --config configs/milestone3.yaml
 
 ### Step 3 — Score the splits
 ```powershell
-python scripts/score_pairs.py --config configs/milestone3.yaml --split val
-python scripts/score_pairs.py --config configs/milestone3.yaml --split test
+python scripts/score_pairs.py --config configs/milestone3.yaml --split val --scoring-mode embedding
+python scripts/score_pairs.py --config configs/milestone3.yaml --split test --scoring-mode embedding
 ```
 
 ### Step 4 — Run threshold sweep and lock the threshold
